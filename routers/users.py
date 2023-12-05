@@ -7,10 +7,10 @@ from passlib.context import CryptContext
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from starlette import status
-from models import Business, BusinessMembers
+from models import Business, BusinessMembers, Wallet
 from database import SessionLocal
 from .auth import get_current_user
-from utils.auth import get_auth_code, get_random_str
+from utils.auth import get_auth_code, get_random_str, verify_sig
 from datetime import datetime
 
 
@@ -117,25 +117,36 @@ async def add_member(user:user_dependency, db: db_dependency, add_member_request
 
 
 @router.post("/get-otp", status_code=status.HTTP_200_OK)
-async def get_otp(db: db_dependency, user: user_dependency, otp_request: GetOtpRequest) -> object:
+async def get_otp(db: db_dependency, user: user_dependency, otp_request: GetOtpRequest):
     user_model = db.query(Business).filter(Business.id == user.get('id')).first()
     stamp = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
-    if otp_request.action == 'connect_wallet' or otp_request.action == 'withdraw':
+
+    if otp_request.action == 'mail':
         code_1 = get_auth_code()
         code_1_plain = code_1['code_plain']
         code_1_hashed = code_1['code_hashed']
-        code_2 = get_auth_code()
-        code_2_plain = code_2['code_plain']
-        code_2_hashed = code_2['code_hashed']
-
         user_model.email_auth_code=code_1_hashed
-        user_model.sms_auth_code=code_2_hashed
         user_model.auth_stamp=stamp
 
         db.add(user_model)
         db.commit()
+        # phone number is on tmp_value phone code on phone_code. after verification number moves from tmp_value
+        # to phone_number
+        # Todo: send code to email
 
-        # Todo: send code to email and phone number
+    if otp_request.action == 'sms':
+        code_1 = get_auth_code()
+        code_1_plain = code_1['code_plain']
+        code_1_hashed = code_1['code_hashed']
+        user_model.sms_auth_code=code_1_hashed
+        user_model.auth_stamp=stamp
+
+        db.add(user_model)
+        db.commit()
+        # phone number is on tmp_value phone code on phone_code. after verification number moves from tmp_value
+        # to phone_number
+        # Todo: send sms to phone number
+
     if otp_request.action == 'phone_verification':
         code_1 = get_auth_code()
         code_1_plain = code_1['code_plain']
@@ -148,6 +159,7 @@ async def get_otp(db: db_dependency, user: user_dependency, otp_request: GetOtpR
         # phone number is on tmp_value phone code on phone_code. after verification number moves from tmp_value
         # to phone_number
         # Todo: send sms to phone number
+
     user_model = db.query(BusinessMembers).filter(BusinessMembers.id == user.get('id')).first()
 
     if otp_request.action == 'regular' and user.get('user_role') == 'owner':
@@ -173,6 +185,20 @@ async def get_otp(db: db_dependency, user: user_dependency, otp_request: GetOtpR
         db.commit()
 
         # Todo: send code to email
+
+    if otp_request.action == 'email':
+        code_1 = get_auth_code()
+        code_1_plain = code_1['code_plain']
+        code_1_hashed = code_1['code_hashed']
+        user_model.email_auth_code=code_1_hashed
+        user_model.auth_stamp=stamp
+
+        db.add(user_model)
+        db.commit()
+        # phone number is on tmp_value phone code on phone_code. after verification number moves from tmp_value
+        # to phone_number
+        # Todo: send code to email
+
     return {'status': 'success', 'message': 'OTP sent'}
 
 
@@ -208,3 +234,7 @@ async def otp_auth(db: db_dependency, user: user_dependency, otp_request: OtpReq
             if not bcrypt_context.verify(otp_request.code_1, user_model.auth_code):
                 return {'status': 'failed', 'message': 'Invalid code'}
             return {'status': 'success', 'message': 'OTP verified'}
+
+
+
+

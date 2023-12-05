@@ -51,3 +51,31 @@ class LoginHistory(Base):
     ip = Column(String)
     status = Column(String)
     date_time = Column(DATETIME)
+
+
+class Wallet(Base):
+    __tablename__ = 'wallets'
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner = Column(Integer)
+    nickname = Column(String)
+    provider = Column(String)
+    asset = Column(String)
+    network = Column(String)
+    address = Column(String)
+    date_created = Column(DATETIME)
+    sig = Column(String)
+    flag = Column(String)
+
+class Rate(Base):
+    __tablename__ = 'rate'
+
+    id = Column(Integer, primary_key=True, index=True)
+    owner = Column(Integer)
+    wallet = Column(String)
+    asset = Column(String)
+    min_amount = Column(Integer)
+    max_amount = Column(Integer)
+    sell = Column(Integer)
+    buy = Column(Integer)
+    date_created = Column(DATETIME)

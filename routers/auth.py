@@ -344,7 +344,7 @@ async def login_access_two(login_request: LoginRequestTwo,
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
                             detail='Could not verify user')
-    token = create_access_token(user.email, user.id, business_id, role, timedelta(minutes=20))
+    token = create_access_token(user.email, user.id, business_id, role, timedelta(minutes=30))
     login_history = LoginHistory(
         user=user.id,
         business_id=business_id,

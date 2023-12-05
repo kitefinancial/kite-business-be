@@ -18,6 +18,7 @@ def get_db():
 
 db_dependency = Annotated[Session, Depends(get_db)]
 bcrypt_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
+sig_secret = '3f67b18883328f69e6372a4b5ba556b9d41ac31364f82befd62f3b1041b156e5'
 
 regex = '^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$'
 
@@ -79,3 +80,22 @@ def get_random_str(size):
 def send2fa(code, email, type, action):
     return True
     #send code to user
+
+
+def sign_record(owner, data, type):
+    if type == 'wallet':
+        records = str(owner)+""+data['nickname']+""+data['provider']+""+data['asset']+""+data['network']+\
+                  ""+data['address']+""+""+sig_secret
+        sig = bcrypt_context.hash(records)
+
+    return sig
+
+
+def verify_sig(current_sig, owner, data, type):
+    if type == 'wallet':
+        records = str(owner)+""+data['nickname']+""+data['provider']+""+data['asset']+""+data['network']+\
+                  ""+data['address']+""+""+sig_secret
+
+        if not bcrypt_context.verify(records, current_sig):
+            return False
+        return True
