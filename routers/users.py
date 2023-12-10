@@ -75,6 +75,8 @@ async def get_user(user: user_dependency, db: db_dependency):
 
 @router.put("/", status_code=status.HTTP_200_OK)
 async def change_password(user: user_dependency, db: db_dependency, password_details: UserVerification):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
     if user is None:
         raise HTTPException(status_code=401, detail='Not authenticated')
     user_model = db.query(Business).filter(Business.id == user.get('id')).first()
@@ -91,6 +93,8 @@ async def change_password(user: user_dependency, db: db_dependency, password_det
 
 @router.post("/add-member", status_code=status.HTTP_200_OK)
 async def add_member(user:user_dependency, db: db_dependency, add_member_request: AddMemberRequest):
+    if user.get('user_role') != 'owner':
+        raise HTTPException(status_code=403, detail="Permission denied.")
     if user.get('em') == add_member_request.email:
         return {'status': 'failed', 'message': 'You cannot add yourself as a member'}
     code = get_auth_code()
@@ -118,6 +122,9 @@ async def add_member(user:user_dependency, db: db_dependency, add_member_request
 
 @router.post("/get-otp", status_code=status.HTTP_200_OK)
 async def get_otp(db: db_dependency, user: user_dependency, otp_request: GetOtpRequest):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+
     user_model = db.query(Business).filter(Business.id == user.get('id')).first()
     stamp = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
 
@@ -204,6 +211,9 @@ async def get_otp(db: db_dependency, user: user_dependency, otp_request: GetOtpR
 
 @router.post("/verify-otp", status_code=status.HTTP_200_OK)
 async def otp_auth(db: db_dependency, user: user_dependency, otp_request: OtpRequest):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+
     if user.get('user_role') == 'owner':
         user_model = db.query(Business).filter(Business.id == user.get('id')).first()
         if otp_request.action == 'connect_wallet' or otp_request.action == 'withdraw':

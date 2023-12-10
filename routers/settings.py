@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from starlette import status
-from models import Business, BusinessMembers, Wallet, Rate
+from models import Business, BusinessMembers, Wallet, OTCRate, OTCFEE
 from database import SessionLocal
 from .auth import get_current_user
 from .users import get_otp
@@ -85,11 +85,19 @@ class SetRateRequest(BaseModel):
     buy: int
 
 
+class SetOtcFee(BaseModel):
+    split_fee: bool
+    charge_customer: bool
+    charge_me: bool
+    merchant_pay: int
+    customer_pay: int
+
+
 
 @router.put("/basic-info", status_code=status.HTTP_200_OK)
 async def update_info(db: db_dependency, user: user_dependency, info_request: BasicInfoRequest):
     if user.get('user_role') != 'owner':
-        raise HTTPException(status_code=403, detail="Permission denied, only business owner can edit.")
+        raise HTTPException(status_code=403, detail="Permission denied.")
     user_model = db.query(Business).filter(Business.id == user.get('id')).first()
     user_model.business_name = info_request.business_name
     user_model.region = info_request.region
@@ -155,6 +163,9 @@ async def add_wallet(user: user_dependency, db: db_dependency, wallet_request: W
 
 @router.get("/get-wallets", status_code=status.HTTP_200_OK)
 async def get_wallets(user: user_dependency, db: db_dependency):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+
     wallets = db.query(Wallet).filter(Wallet.owner == user.get('bid')).all()
     owner = user.get('bid')
     type = 'wallet'
@@ -175,7 +186,9 @@ async def get_wallets(user: user_dependency, db: db_dependency):
 
 
 @router.delete("/delete-wallet/{wallet_id}", status_code=status.HTTP_200_OK)
-async def delete_rate(db: db_dependency, wallet_id: int = Path(gt=0)):
+async def delete_rate(user: user_dependency, db: db_dependency, wallet_id: int = Path(gt=0)):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
     wallet = db.query(Wallet).filter(Wallet.id == wallet_id).first()
     if wallet is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -187,13 +200,15 @@ async def delete_rate(db: db_dependency, wallet_id: int = Path(gt=0)):
 
 @router.post("/set-rate", status_code=status.HTTP_201_CREATED)
 async def set_rate(user: user_dependency, db: db_dependency, rate_request: SetRateRequest):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
     if not user:
         raise HTTPException(status_code=403, detail="Permission denied")
 
     if rate_request.min_amount >= rate_request.max_amount:
         return {'status': 'failed', 'message': 'Minimum amount must be less than maximum'}
 
-    set_rate = Rate(
+    set_rate = OTCRate(
         owner=user.get('bid'),
         wallet=rate_request.wallet,
         asset=rate_request.asset,
@@ -212,14 +227,18 @@ async def set_rate(user: user_dependency, db: db_dependency, rate_request: SetRa
 
 @router.get("/get-rates", status_code=status.HTTP_200_OK)
 async def get_rates(user: user_dependency, db: db_dependency):
-    rates = db.query(Rate).filter(Rate.owner == user.get('bid')).all()
+    rates = db.query(OTCRate).filter(OTCRate.owner == user.get('bid')).all()
     return rates
 
+
 @router.put("/edit-rate/{rate_id}", status_code=status.HTTP_200_OK)
-async def edit_rate(db: db_dependency,
+async def edit_rate(user: user_dependency, db: db_dependency,
                     edit_rate_request: SetRateRequest,
                     rate_id: int = Path(gt=0)):
-    rate = db.query(Rate).filter(Rate.id == rate_id).first()
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+
+    rate = db.query(OTCRate).filter(OTCRate.id == rate_id).first()
     if rate is None:
         raise HTTPException(status_code=404, detail="Not found")
     rate.wallet=edit_rate_request.wallet
@@ -234,13 +253,76 @@ async def edit_rate(db: db_dependency,
 
     return {'status': 'success', 'message': 'Rate edited'}
 
+
 @router.delete("/delete-rate/{rate_id}", status_code=status.HTTP_200_OK)
-async def delete_rate(db: db_dependency, rate_id: int = Path(gt=0)):
-    rate = db.query(Rate).filter(Rate.id == rate_id).first()
+async def delete_rate(user: user_dependency, db: db_dependency, rate_id: int = Path(gt=0)):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+
+    rate = db.query(OTCRate).filter(OTCRate.id == rate_id).first()
     if rate is None:
         raise HTTPException(status_code=404, detail="Not found")
-    db.query(Rate).filter(Rate.id == rate_id).delete()
+    db.query(OTCRate).filter(OTCRate.id == rate_id).delete()
     db.commit()
 
     return {'status': 'success', 'message': 'Rate deleted'}
 
+
+
+@router.post("/otc-fee", status_code=status.HTTP_200_OK)
+async def set_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: SetOtcFee):
+    if user.get('user_role') != 'owner':
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if set_otc_fee.split_fee:
+        if set_otc_fee.customer_pay+set_otc_fee.merchant_pay != 100:
+            return {'status': 'When splitting fees you and customer must make up 100% of fees'}
+    otc_fee = OTCFEE(
+        owner=user.get('id'),
+        kite_fee=0.5,
+        split_fee=set_otc_fee.split_fee,
+        charge_customer=set_otc_fee.charge_customer,
+        charge_me=set_otc_fee.charge_me,
+        merchant_pay=set_otc_fee.merchant_pay,
+        customer_pay=set_otc_fee.customer_pay,
+        date_created=datetime.today().strftime('%Y-%m-%d %H-%M-%S')
+    )
+
+    db.add(otc_fee)
+    db.commit()
+
+    return {'status': 'success', 'message': 'OTC Fees updated'}
+
+
+@router.get("/otc-fee", status_code=status.HTTP_200_OK)
+async def get_otc_fee(user: user_dependency, db: db_dependency):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+    otc_fee = db.query(OTCFEE).filter(OTCFEE.owner == user.get('bid')).first()
+
+    if otc_fee is None:
+        return {'status': 'success', 'message': 'no records'}
+    return otc_fee
+
+@router.put("/otc-fee/{otc_fee_id}", status_code=status.HTTP_201_CREATED)
+async def update_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: SetOtcFee, otc_fee_id: int = Path(gt=0)):
+    if user.get('user_role') != 'owner':
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if set_otc_fee.split_fee:
+        if set_otc_fee.customer_pay+set_otc_fee.merchant_pay != 100:
+            return {'status': 'When splitting fees you and customer must make up 100% of fees'}
+
+    otc_fee = db.query(OTCFEE).filter(OTCFEE.id == otc_fee_id).first()
+
+    otc_fee.split_fee = set_otc_fee.split_fee
+    otc_fee.charge_customer = set_otc_fee.charge_customer
+    otc_fee.charge_me = set_otc_fee.charge_me
+    otc_fee.merchant_pay = set_otc_fee.merchant_pay
+    otc_fee.customer_pay = set_otc_fee.customer_pay
+    otc_fee.date_created = datetime.today().strftime('%Y-%m-%d %H-%M-%S')
+
+    db.add(otc_fee)
+    db.commit()
+
+    return {'status': 'success', 'message': 'OTC fee updated'}
