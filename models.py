@@ -17,6 +17,7 @@ class Business(Base):
     email_auth_code = Column(String)
     sms_auth_code = Column(String)
     tmp_value = Column(String)
+    kite_fee = Column(Float)
     auth_stamp = Column(DATETIME)
     date_created = Column(DATETIME)
     last_password_change = Column(DATETIME)
@@ -92,6 +93,8 @@ class OTCFEE(Base):
     charge_me = Column(Boolean)
     merchant_pay = Column(Integer)
     customer_pay = Column(Integer)
+    min = Column(Integer)
+    max = Column(Integer)
     date_created = Column(DATETIME)
 
 
@@ -108,10 +111,12 @@ class OTCORDERS(Base):
     rate = Column(Integer)
     amount = Column(Float)
     amount_usd = Column(Integer)
-    amount_received_usd = Column(Integer)
+    amount_received = Column(Integer)
     merchant_fee = Column(Integer)
     customer_fee = Column(Integer)
     wallet = Column(Integer)
+    network = Column(String)
+    address = Column(String)
     payment_details = Column(String)
     tx_hash = Column(String)
     cash_pop = Column(String)
@@ -121,7 +126,7 @@ class OTCORDERS(Base):
     time_settled = Column(DATETIME)
     time_completed = Column(DATETIME)
     time_adjusted = Column(DATETIME)
-    status = Column(String) # open","waiting_1","waiting_2","waiting_3","dispute","completed
+    status = Column(String) # open","waiting_1","waiting_2","waiting_3","dispute","completed, cancelled
 
 
 
@@ -142,6 +147,132 @@ class Customers(Base):
     account_status = Column(String) # active, inactive, suspended
     date_created = Column(DATETIME)
 
+
+class CustomersBalance(Base):
+    __tablename__ = 'customers_balance'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    customer_id = Column(Integer)
+    asset = Column(String)
+    balance = Column(Float)
+    last_balance = Column(Float)
+    last_updated = Column(DATETIME)
+    date_created = Column(DATETIME)
+
+
+class MerchantBalance(Base):
+    __tablename__ = 'merchant_balance'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    asset = Column(String)
+    balance = Column(Float)
+    last_balance = Column(Float)
+    last_updated = Column(DATETIME)
+    date_created = Column(DATETIME)
+
+
+class Adverts(Base):
+    __tablename__ = 'adverts'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    inputter = Column(Integer)
+    asset = Column(String)
+    trade_option = Column(String)
+    rate = Column(Integer)
+    min = Column(Integer)
+    max = Column(Integer)
+    created_by = Column(String)
+    payment_method = Column(String)
+    payment_details = Column(String)
+    payment_window = Column(Integer)
+    date_created = Column(DATETIME)
+
+
+class CustomerActivity(Base):
+    __tablename__ = 'customer_activity'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    customer_id = Column(Integer)
+    asset = Column(String)
+    activity_type = Column(String)
+    amount = Column(Float)
+    rate_usd = Column(Integer)
+    address = Column(String)
+    network = Column(String)
+    memo = Column(String)
+    fee = Column(Float)
+    status = Column(String)
+    confirmations = Column(Integer)
+    tx_hash = Column(String)
+    date_created = Column(DATETIME)
+    conf_notify = Column(Boolean)
+    sent_notify = Column(Boolean)
+    sig = Column(String)
+    flag = Column(Boolean)
+
+
+class MerchantActivity(Base):
+    __tablename__ = 'merchant_activity'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    asset = Column(String)
+    activity_type = Column(String)
+    amount = Column(Float)
+    rate_usd = Column(Integer)
+    address = Column(String)
+    network = Column(String)
+    memo = Column(String)
+    fee = Column(Float)
+    status = Column(String)
+    confirmations = Column(Integer)
+    tx_hash = Column(String)
+    date_created = Column(DATETIME)
+    conf_notify = Column(Boolean)
+    sent_notify = Column(Boolean)
+    sig = Column(String)
+    flag = Column(Boolean)
+
+
+class MPFees(Base):
+    __tablename__ = 'mp_fees'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    fee = Column(Float)
+    maker = Column(Integer)
+    taker = Column(Integer)
+    min = Column(Integer)
+    max = Column(Integer)
+    date_created = Column(DATETIME)
+
+class MarketPlaceOrders(Base):
+    __tablename__ = 'mp_orders'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    buyer = Column(Integer)
+    seller = Column(Integer)
+    created_by = Column(String)
+    trade_option = Column(String)
+    currency = Column(String)
+    asset = Column(String)
+    rate = Column(Integer)
+    amount = Column(Float)
+    amount_usd = Column(Integer)
+    taker_fee = Column(Float)
+    maker_fee = Column(Float)
+    payment_method = Column(String)
+    payment_details = Column(String)
+    cash_pop = Column(String)
+    time_started = Column(DATETIME)
+    time_settled = Column(DATETIME)
+    time_completed = Column(DATETIME)
+    status = Column(String)
 
 
 

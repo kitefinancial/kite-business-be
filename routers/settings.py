@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from starlette import status
-from models import Business, BusinessMembers, Wallet, OTCRate, OTCFEE
+from models import Business, BusinessMembers, Wallet, OTCRate, OTCFEE, MPFees
 from database import SessionLocal
 from .auth import get_current_user
 from .users import get_otp
@@ -91,8 +91,16 @@ class SetOtcFee(BaseModel):
     charge_me: bool
     merchant_pay: int
     customer_pay: int
+    min: int
+    max: int
 
 
+class SetMPFee(BaseModel):
+    fee: float
+    maker: int
+    taker: int
+    min: int
+    max: int
 
 @router.put("/basic-info", status_code=status.HTTP_200_OK)
 async def update_info(db: db_dependency, user: user_dependency, info_request: BasicInfoRequest):
@@ -268,7 +276,6 @@ async def delete_rate(user: user_dependency, db: db_dependency, rate_id: int = P
     return {'status': 'success', 'message': 'Rate deleted'}
 
 
-
 @router.post("/otc-fee", status_code=status.HTTP_200_OK)
 async def set_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: SetOtcFee):
     if user.get('user_role') != 'owner':
@@ -285,6 +292,8 @@ async def set_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: Set
         charge_me=set_otc_fee.charge_me,
         merchant_pay=set_otc_fee.merchant_pay,
         customer_pay=set_otc_fee.customer_pay,
+        min=set_otc_fee.min,
+        max=set_otc_fee.max,
         date_created=datetime.today().strftime('%Y-%m-%d %H-%M-%S')
     )
 
@@ -298,11 +307,12 @@ async def set_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: Set
 async def get_otc_fee(user: user_dependency, db: db_dependency):
     if user.get('user_role') == 'customer':
         raise HTTPException(status_code=403, detail="Permission denied.")
-    otc_fee = db.query(OTCFEE).filter(OTCFEE.owner == user.get('bid')).first()
+    otc_fee = db.query(OTCFEE).filter(OTCFEE.owner == user.get('bid')).all()
 
     if otc_fee is None:
         return {'status': 'success', 'message': 'no records'}
     return otc_fee
+
 
 @router.put("/otc-fee/{otc_fee_id}", status_code=status.HTTP_201_CREATED)
 async def update_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: SetOtcFee, otc_fee_id: int = Path(gt=0)):
@@ -326,3 +336,70 @@ async def update_otc_fee(user: user_dependency, db: db_dependency, set_otc_fee: 
     db.commit()
 
     return {'status': 'success', 'message': 'OTC fee updated'}
+
+@router.post("/mp-fee", status_code=status.HTTP_201_CREATED)
+async def set_mp_fee(user: user_dependency, db: db_dependency, mp_fee_request: SetMPFee):
+    if user.get('user_role') != 'owner':
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if mp_fee_request.fee < 0.3:
+        return {'status': 'fail', 'message': 'Your marketplace fee cannot be less than 0.3%'}
+
+    if mp_fee_request.min < 1:
+        return {'status': 'fail', 'message': 'Your minimum range should be $1'}
+    if mp_fee_request.max < mp_fee_request.min:
+        return {'status': 'fail', 'message': 'Your maximum range should be greater than minimum'}
+
+    mp_fee = MPFees(
+        business_id=user.get('id'),
+        fee=mp_fee_request.fee,
+        maker=mp_fee_request.maker,
+        taker=mp_fee_request.taker,
+        min=mp_fee_request.min,
+        max=mp_fee_request.max,
+        date_created=datetime.today().strftime('%Y-%m-%d %H-%M-%S')
+    )
+
+    db.add(mp_fee)
+    db.commit()
+
+    return {'status': 'success', 'message': 'Marketplace fee created'}
+
+
+@router.get("/mp-fee", status_code=status.HTTP_200_OK)
+async def get_mp_fee(user: user_dependency, db: db_dependency):
+    if user.get('user_role') == 'customer':
+        raise HTTPException(status_code=403, detail="Permission denied.")
+    mp_fees = db.query(MPFees).filter(MPFees.business_id == user.get('bid')).all()
+
+    return mp_fees
+
+
+@router.put("/mp-fee/{mp_fee_id}", status_code=status.HTTP_200_OK)
+async def update_mp_fee(user: user_dependency, db: db_dependency, mp_fee_request: SetMPFee, mp_fee_id: int = Path(gt=0)):
+    if user.get('user_role') != 'owner':
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if mp_fee_request.fee < 0.3:
+        return {'status': 'fail', 'message': 'Your marketplace fee cannot be less than 0.3%'}
+
+    if mp_fee_request.min < 1:
+        return {'status': 'fail', 'message': 'Your minimum range should be $1'}
+    if mp_fee_request.max < mp_fee_request.min:
+        return {'status': 'fail', 'message': 'Your maximum range should be greater than minimum'}
+
+    mp_fee = db.query(MPFees).filter(MPFees.id == mp_fee_id).first()
+
+    if mp_fee is None:
+        raise HTTPException(status_code=404, detail="Fee record not found")
+
+    mp_fee.fee = mp_fee_request.fee
+    mp_fee.maker = mp_fee_request.maker
+    mp_fee.taker = mp_fee_request.taker
+    mp_fee.min = mp_fee_request.min
+    mp_fee.max = mp_fee_request.max
+
+    db.add(mp_fee)
+    db.commit()
+
+    return {'status': 'success', 'message': 'Marketplace fee updated'}

@@ -10,7 +10,7 @@ from starlette import status
 from models import Business, BusinessMembers, Wallet
 from database import SessionLocal
 from .auth import get_current_user
-from utils.auth import get_auth_code, get_random_str, verify_sig
+from utils.auth import get_auth_code, get_random_str, verify_sig, get_address
 from datetime import datetime
 
 
@@ -59,6 +59,10 @@ class AddMemberRequest(BaseModel):
     last_name: str
     job_title: str
     role: str
+
+class GetAddress(BaseModel):
+    asset: str
+    network: str
 
 
 @router.get("/", status_code=status.HTTP_200_OK)
@@ -246,5 +250,12 @@ async def otp_auth(db: db_dependency, user: user_dependency, otp_request: OtpReq
             return {'status': 'success', 'message': 'OTP verified'}
 
 
+@router.post("/get-address", status_code=status.HTTP_200_OK)
+async def get_deposit_address(user: user_dependency, db: db_dependency, address_req: GetAddress):
+    role = user.get('user_role')
+    if role != 'customer':
+        role = 'owner'
 
+    address = get_address(db, address_req.asset, user.get('bid'), user.get('id'), user.get('user_role'))
 
+    return {'status': 'success', 'address': address, 'network': address_req.network}
