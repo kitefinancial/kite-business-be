@@ -258,6 +258,7 @@ class MarketPlaceOrders(Base):
     buyer = Column(Integer)
     seller = Column(Integer)
     created_by = Column(String)
+    engaged_by = Column(String)
     trade_option = Column(String)
     currency = Column(String)
     asset = Column(String)
@@ -273,7 +274,32 @@ class MarketPlaceOrders(Base):
     time_settled = Column(DATETIME)
     time_completed = Column(DATETIME)
     status = Column(String)
+    sig = Column(String)
+    flag = Column(String)
 
 
+class PaymentDetails(Base):
+    __tablename__ = 'payment_details'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    inputter = Column(Integer)
+    role = Column(String)
+    payment_method = Column(String)
+    payment_details = Column(String)
+    date_created = Column(DATETIME)
+    sig = Column(String)
+    flag = Column(Boolean)
 
 
+class Earnings(Base):
+    __tablename__ = 'earnings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer)
+    asset = Column(String)
+    amount = Column(Float)
+    narration = Column(String)
+    date_created = Column(DATETIME)
+    sig = Column(String)
+    flag = Column(Boolean)

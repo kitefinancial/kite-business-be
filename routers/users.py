@@ -7,10 +7,10 @@ from passlib.context import CryptContext
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from starlette import status
-from models import Business, BusinessMembers, Wallet
+from models import Business, BusinessMembers, Wallet, PaymentDetails
 from database import SessionLocal
 from .auth import get_current_user
-from utils.auth import get_auth_code, get_random_str, verify_sig, get_address
+from utils.auth import get_auth_code, get_random_str, verify_sig, get_address, sign_record
 from datetime import datetime
 
 
@@ -63,6 +63,10 @@ class AddMemberRequest(BaseModel):
 class GetAddress(BaseModel):
     asset: str
     network: str
+
+class PaymentDetailsReq(BaseModel):
+    payment_method: str
+    payment_details: str
 
 
 @router.get("/", status_code=status.HTTP_200_OK)
@@ -259,3 +263,64 @@ async def get_deposit_address(user: user_dependency, db: db_dependency, address_
     address = get_address(db, address_req.asset, user.get('bid'), user.get('id'), user.get('user_role'))
 
     return {'status': 'success', 'address': address, 'network': address_req.network}
+
+
+@router.post("/payment-details", status_code=status.HTTP_201_CREATED)
+async def add_payment_details(user: user_dependency, db: db_dependency, payment_details: PaymentDetailsReq):
+    if user.get('user_role') == 'member':
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    if payment_details.payment_method == '' or payment_details.payment_details == '':
+        return {'status': 'fail', 'message': 'payment method or payment details cannot be empty'}
+
+    details = PaymentDetails(
+        business_id=user.get('bid'),
+        inputter=user.get('id'),
+        role=user.get('user_role'),
+        payment_method=payment_details.payment_method,
+        payment_details=payment_details.payment_details,
+        date_created=datetime.today().strftime('%Y-%m-%d %H-%M-%S')
+    )
+
+    db.add(details)
+    db.commit()
+    sig = sign_record(user.get('id'), details, 'payment_details')
+    details.sig = sig
+    db.add(details)
+    db.commit()
+
+    return {'status': 'success', 'message': 'Payment details added'}
+
+
+@router.get("/payment-details", status_code=status.HTTP_200_OK)
+async def get_payment_details(user: user_dependency, db: db_dependency):
+    if user.get('user_role') == 'customer':
+        details = db.query(PaymentDetails).filter(PaymentDetails.business_id == user.get('bid'))\
+            .filter(PaymentDetails.inputter == user.get('id')).all()
+    if user.get('user_role') != 'customer':
+        details = db.query(PaymentDetails).filter(PaymentDetails.business_id == user.get('bid')).all()
+
+    a = 0
+    payments = {}
+    for i in details:
+        if not verify_sig(i.sig, i.inputter, i, 'payment_details'):
+            continue
+        data = {'id': i.id, 'payment_method': i.payment_method, 'payment_details': i.payment_details, 'date_created': i.date_created }
+        payments.update({a: data})
+        a= a+1
+
+    return payments
+
+
+@router.delete("/payment-details/{pay_id}", status_code=status.HTTP_200_OK)
+async def delete_payment_method(user: user_dependency, db: db_dependency, pay_id: int = Path(gt=0)):
+    if user.get('user_role') == 'member':
+        raise HTTPException(status_code=403, detail="Permission denied")
+    detail = db.query(PaymentDetails).filter(PaymentDetails.id == pay_id).first()
+    if user.get('id') != detail.inputter:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    db.query(PaymentDetails).filter(PaymentDetails.id == pay_id).delete()
+    db.commit()
+
+    return {'status': 'success', 'message': 'Payment details removed'}

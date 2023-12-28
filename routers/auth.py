@@ -258,6 +258,7 @@ async def create_user(db: db_dependency, create_user_request: CreateUserRequest)
         hashed_password=bcrypt_context.hash(create_user_request.password),
         account_status='inactive',
         email_auth_code=code_hashed,
+        kite_fee=0.2, # 20% MP fee
         date_created=time_stamp
 
     )
